@@ -3,25 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0a0a0f">
+  <meta name="theme-color" content="#0c0c18">
   <title>ward_sentry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* ════════════════════════════════
+       BODY & BACKGROUND
+    ════════════════════════════════ */
     body {
       background: #0a0a0f;
-      overflow: hidden;
-      width: 100dvw;
-      height: 100dvh;
-      font-family: 'Courier New', monospace;
+      width: 100dvw; height: 100dvh;
+      font-family: 'Inter', system-ui, sans-serif;
       touch-action: none;
       user-select: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
 
-    /* Animated background grid */
+    /* moving cyberpunk grid */
     .grid {
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background-image:
         linear-gradient(rgba(0,255,200,0.04) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0,255,200,0.04) 1px, transparent 1px);
@@ -34,486 +42,378 @@
       to   { background-position: 48px 48px; }
     }
 
-    /* Scanline overlay */
+    /* scanlines */
     .scanlines {
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0; z-index: 50;
       background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.07) 2px,
-        rgba(0,0,0,0.07) 4px
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
       );
       pointer-events: none;
+    }
+
+    /* ════════════════════════════════
+       TITLE & HINT
+    ════════════════════════════════ */
+    .title {
+      position: relative; z-index: 10;
+      margin-bottom: clamp(32px, 7vmin, 52px);
+      text-align: center;
+    }
+    .title h1 {
+      font-size: clamp(17px, 4.5vw, 28px);
+      font-weight: 300;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: #d8d8f0;
+      text-shadow: 0 0 30px rgba(0,255,200,0.2);
+    }
+    .title h1 strong { font-weight: 600; color: #fff; }
+    .title .sub {
+      margin-top: 5px;
+      font-size: clamp(8px, 1.8vw, 10px);
+      letter-spacing: 4px;
+      color: #2e2e54;
+      text-transform: uppercase;
+    }
+
+    .hint {
+      position: relative; z-index: 10;
+      margin-top: clamp(32px, 7vmin, 52px);
+      font-size: clamp(8px, 2vw, 10px);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #252545;
+    }
+
+    /* ════════════════════════════════
+       3-D SCENE
+    ════════════════════════════════ */
+    .scene {
+      perspective: 950px;
+      position: relative;
       z-index: 10;
     }
 
-    canvas {
-      position: fixed;
-      inset: 0;
-      display: block;
+    /* soft ground shadow (no filter on cube!) */
+    .cube-shadow {
+      position: absolute;
+      bottom: -26px; left: 50%;
+      transform: translateX(-50%);
+      width: 180px; height: 28px;
+      background: radial-gradient(ellipse, rgba(0,0,0,0.6) 0%, transparent 70%);
+      pointer-events: none;
     }
 
-    /* iOS gyro permission overlay */
-    #permOverlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
+.cube {
+      --s: min(215px, 52vmin);
+      --h: calc(var(--s) / 2);
+      width: var(--s); height: var(--s);
+      position: relative;
+      transform-style: preserve-3d;
+      transform: rotateX(-28deg) rotateY(38deg);
+      cursor: grab;
+      will-change: transform;
+    }
+    .cube.dragging { cursor: grabbing; }
+
+    /* ════════════════════════════════
+       FACE — base
+    ════════════════════════════════ */
+    .face {
+      position: absolute; inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 100;
-      gap: 20px;
-      backdrop-filter: blur(8px);
+      gap: clamp(8px, 2vmin, 13px);
+      text-decoration: none;
+      border-radius: 0;
+      /* no overflow:hidden — glow needs to escape the face plane */
+      transform-style: preserve-3d;
+
+      background: #0a0a0f;
+      border: 1px solid rgba(255,255,255,0.55);
+      box-shadow: none;
+
+      transition: border-color 0.3s;
     }
-    #permOverlay.hidden { display: none; }
-    #permOverlay p {
-      color: #00ffc8;
-      font-size: 16px;
-      text-align: center;
-      padding: 0 32px;
-      line-height: 1.6;
-      text-shadow: 0 0 12px #00ffc8;
+
+    /* face positions */
+    .face-front  { transform: translateZ(var(--h)); }
+    .face-back   { transform: rotateY(180deg) translateZ(var(--h)); }
+    .face-left   { transform: rotateY(-90deg) translateZ(var(--h)); }
+    .face-right  { transform: rotateY( 90deg) translateZ(var(--h)); }
+    .face-top    { transform: rotateX( 90deg) translateZ(var(--h)); }
+    .face-bottom { transform: rotateX(-90deg) translateZ(var(--h)); }
+
+    /* accent colour per face */
+    .c-tg    { --c: #29a8eb; }
+    .c-vk    { --c: #5b8bcc; }
+    .c-ig    { --c: #d63376; }
+    .c-yt    { --c: #e63030; }
+    .c-proxy { --c: #00c9a0; }
+    .c-ym    { --c: #ffdb4d; }
+
+    .face::before { display: none; }
+    .face::after  { display: none; }
+
+
+    /* ════════════════════════════════
+       3-D GLOW — floats in front of face
+       translateZ pushes it toward viewer
+    ════════════════════════════════ */
+    .face-glow {
+      position: absolute;
+      /* larger than the face so light spills around edges */
+      inset: -35%;
+      border-radius: 50%;
+      transform: translateZ(30px);
+      background: radial-gradient(
+        ellipse at center,
+        color-mix(in srgb, var(--c) 55%, transparent) 0%,
+        color-mix(in srgb, var(--c) 22%, transparent) 35%,
+        transparent 68%
+      );
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s;
     }
-    #permOverlay p span { color: #fff; }
-    #permBtn {
-      padding: 14px 40px;
-      background: transparent;
-      border: 2px solid #00ffc8;
-      color: #00ffc8;
-      font-family: inherit;
-      font-size: 16px;
-      letter-spacing: 2px;
-      cursor: pointer;
-      border-radius: 8px;
-      text-shadow: 0 0 8px #00ffc8;
-      box-shadow: 0 0 20px #00ffc880, inset 0 0 20px #00ffc810;
-      transition: all 0.2s;
+
+    /* ════════════════════════════════
+       HOVER
+    ════════════════════════════════ */
+    a.face:hover {
+      border-color: rgba(255,255,255,0.85);
     }
-    #permBtn:hover { background: #00ffc820; box-shadow: 0 0 40px #00ffc8; }
+
+    a.face:hover .face-glow {
+      opacity: 1;
+      animation: glowPulse 1.8s ease-in-out infinite;
+    }
+
+
+    @keyframes glowPulse {
+      0%, 100% { opacity: 0.75; transform: translateZ(30px) scale(1);   }
+      50%       { opacity: 1;    transform: translateZ(30px) scale(1.08); }
+    }
+
+    /* pulsing glow (45° directional stays consistent) */
+    @keyframes chestPulse {
+      0%, 100% {
+        box-shadow:
+          inset 3px  3px 10px #04040a,
+          inset -3px -3px 10px #1a1a2e,
+          inset 0 0 28px color-mix(in srgb, var(--c) 20%, transparent),
+          -14px -14px 35px color-mix(in srgb, var(--c) 50%, transparent),
+          -24px -24px 65px color-mix(in srgb, var(--c) 28%, transparent),
+          10px  10px 22px rgba(0,0,0,0.55),
+          0 0 50px color-mix(in srgb, var(--c) 14%, transparent);
+      }
+      50% {
+        box-shadow:
+          inset 3px  3px 10px #04040a,
+          inset -3px -3px 10px #1a1a2e,
+          inset 0 0 40px color-mix(in srgb, var(--c) 32%, transparent),
+          -20px -20px 50px color-mix(in srgb, var(--c) 68%, transparent),
+          -35px -35px 90px color-mix(in srgb, var(--c) 38%, transparent),
+          12px  12px 28px rgba(0,0,0,0.6),
+          0 0 75px color-mix(in srgb, var(--c) 22%, transparent);
+      }
+    }
+
+    /* ════════════════════════════════
+       FACE CONTENT
+    ════════════════════════════════ */
+    .face-icon {
+      width:  clamp(26px, 7vmin, 40px);
+      height: clamp(26px, 7vmin, 40px);
+      color: var(--c);
+      position: relative; z-index: 1;
+    }
+    .face-name {
+      font-size: clamp(9px, 2.5vmin, 13px);
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.88);
+      position: relative; z-index: 1;
+    }
+    .face-sub {
+      font-size: clamp(7px, 1.8vmin, 10px);
+      letter-spacing: 1.5px;
+      color: color-mix(in srgb, var(--c) 75%, #aaa);
+      position: relative; z-index: 1;
+    }
+
   </style>
 </head>
 <body>
   <div class="grid"></div>
   <div class="scanlines"></div>
-  <canvas id="c"></canvas>
 
-  <!-- iOS 13+ requires explicit permission for DeviceOrientation -->
-  <div id="permOverlay" class="hidden">
-    <p>Разреши доступ к <span>гироскопу</span>, чтобы управлять мячиком наклоном телефона</p>
-    <button id="permBtn">РАЗРЕШИТЬ</button>
+  <div class="title">
+    <h1><strong>ward</strong>_sentry</h1>
+    <div class="sub">digital presence</div>
   </div>
+
+  <div class="scene">
+    <div class="cube-shadow"></div>
+    <div class="cube" id="cube">
+
+      <!-- FRONT — Telegram -->
+      <a class="face face-front c-tg" href="https://t.me/ward_sentry" target="_blank" rel="noopener">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l.002.001-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.434z"/>
+        </svg>
+        <div class="face-name">Telegram</div>
+        <div class="face-sub">@ward_sentry</div>
+      </a>
+
+      <!-- BACK — YouTube -->
+      <a class="face face-back c-yt" href="https://youtube.com/@ward_sentry" target="_blank" rel="noopener">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M10 9.5l5.5 3-5.5 3V9.5z" fill="currentColor"/>
+        </svg>
+        <div class="face-name">YouTube</div>
+        <div class="face-sub">@ward_sentry</div>
+      </a>
+
+      <!-- LEFT — VK -->
+      <a class="face face-left c-vk" href="https://vk.com/ward_sentry" target="_blank" rel="noopener">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13.6 17.3h1.5s.5-.1.7-.3c.2-.2.2-.7.2-.7s0-2 1-2.3c.9-.3 2.1 1.9 3.3 2.8.3.2.7.4 1.2.4l2.3-.1s1.2-.1.6-1c0-.1-.3-.7-1.7-2-.7-.6-1.5-1.4-.5-2.7 1.1-1.5 1.6-2.3 1.4-2.7-.2-.4-.9-.3-.9-.3l-2.6.1s-.2 0-.3.1c-.1.1-.2.2-.2.2s-.4 1.1-.9 2c-1.2 1.9-1.6 2-1.8 1.9-.4-.3-.3-1.2-.3-1.9 0-2 .3-2.9-.6-3.1-.3-.1-.5-.1-1.3-.2-1.1 0-1.9.1-2.5.2-.3.2-.5.5-.4.5.2 0 .7.1.9.4.3.5.3 1.4.3 1.4s.2 2.4-.4 2.7c-.4.2-1-.3-2.2-2.1-.6-.9-1-1.9-1-1.9s-.1-.2-.2-.2c-.2-.1-.4-.1-.4-.1l-2.5.1s-.4 0-.5.2c-.1.2 0 .4 0 .4s1.9 4.5 4.1 6.8c2 2.1 4.2 1.9 4.2 1.9z"/>
+        </svg>
+        <div class="face-name">VKontakte</div>
+        <div class="face-sub">@ward_sentry</div>
+      </a>
+
+      <!-- RIGHT — Instagram -->
+      <a class="face face-right c-ig" href="https://instagram.com/ward_sentry" target="_blank" rel="noopener">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="2" width="20" height="20" rx="5.5" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="17.5" cy="6.5" r="1.3" fill="currentColor"/>
+        </svg>
+        <div class="face-name">Instagram</div>
+        <div class="face-sub">@ward_sentry</div>
+      </a>
+
+      <!-- TOP — MTProxy -->
+      <a class="face face-top c-proxy" href="proxy.html">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="12" cy="20" r="1.3" fill="currentColor"/>
+        </svg>
+        <div class="face-name">MTProxy</div>
+        <div class="face-sub">открыть список</div>
+      </a>
+
+      <!-- BOTTOM — Яндекс Музыка -->
+      <a class="face face-bottom c-ym" href="https://music.yandex.ru/playlists/lk.f5e8bb59-babc-4c44-8b30-8f827ba316b9?utm_source=desktop&utm_medium=copy_link" target="_blank" rel="noopener">
+        <div class="face-glow"></div>
+        <svg class="face-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3zm0 2a7 7 0 1 1 0 14A7 7 0 0 1 12 5zm-1 3v8l6-4-6-4z"/>
+        </svg>
+        <div class="face-name">Яндекс Музыка</div>
+        <div class="face-sub">плейлист</div>
+      </a>
+
+    </div>
+  </div>
+
+  <div class="hint">drag to rotate</div>
 
   <script>
   (() => {
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
+    const cube = document.getElementById('cube');
 
-    // ─── RESIZE ───────────────────────────────────────────────────────────────
-    let W, H;
-    function resize() {
-      W = canvas.width  = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-      layoutButtons();
+    let rotX = -28, rotY = 38;
+    let velX = 0, velY = 0;
+    let dragging  = false;
+    let hasDragged = false;
+    let lastPX = 0, lastPY = 0;
+    let lastDragEnd = 0;
+    let raf = 0;
+
+    const IDLE_AFTER  = 2500;
+    const AUTO_SPEED  = 0.18;
+
+    function applyTransform() {
+      cube.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
     }
 
-    // ─── SOCIALS ──────────────────────────────────────────────────────────────
-    const SOCIALS = [
-      { label: 'VK',        handle: '@ward_sentry', url: 'https://vk.com/ward_sentry',           color: '#5181b8', glow: '#5181b880' },
-      { label: 'Telegram',  handle: '@ward_sentry', url: 'https://t.me/ward_sentry',              color: '#29a8eb', glow: '#29a8eb80' },
-      { label: 'Instagram', handle: '@ward_sentry', url: 'https://instagram.com/ward_sentry',     color: '#e1306c', glow: '#e1306c80' },
-      { label: 'YouTube',   handle: '@ward_sentry', url: 'https://youtube.com/@ward_sentry',      color: '#ff3e3e', glow: '#ff3e3e80' },
-    ];
-
-    // ─── BUTTONS ──────────────────────────────────────────────────────────────
-    const BTNS = [];
-    const BTN_R = 12; // corner radius
-
-    function layoutButtons() {
-      BTNS.length = 0;
-      const pad   = Math.min(24, W * 0.05);
-      const gap   = Math.min(18, W * 0.04);
-      const bw    = (W - pad * 2 - gap) / 2;
-      const bh    = Math.max(64, Math.min(88, H * 0.11));
-      const cols  = 2;
-      const rows  = 2;
-      const totalH = rows * bh + (rows - 1) * gap;
-      const startY = H * 0.42 - totalH / 2;  // center slightly above middle (title above)
-
-      SOCIALS.forEach((s, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        BTNS.push({
-          x: pad + col * (bw + gap),
-          y: startY + row * (bh + gap),
-          w: bw,
-          h: bh,
-          social: s,
-          glow:       0,   // 0-1 smooth glow intensity
-          press:      0,   // 0-1 press animation
-          cooldown:   0,   // frames before re-trigger
-        });
-      });
+    function onDown(px, py) {
+      dragging   = true;
+      hasDragged = false;
+      lastPX = px; lastPY = py;
+      velX = velY = 0;
+      cube.classList.add('dragging');
+      cancelAnimationFrame(raf);
     }
 
-    // ─── BALL ─────────────────────────────────────────────────────────────────
-    const BALL_R  = 22;
-    const FRICTION = 0.985;
-    const BOUNCE   = 0.55;
-    const GRAVITY_BASE = 0.38;
-
-    const ball = { x: 0, y: 0, vx: 0, vy: 0 };
-    const trail = [];
-
-    function resetBall() {
-      ball.x  = W / 2;
-      ball.y  = H * 0.18;
-      ball.vx = (Math.random() - 0.5) * 3;
-      ball.vy = 0;
-      trail.length = 0;
+    function onMove(px, py) {
+      if (!dragging) return;
+      const dx = px - lastPX;
+      const dy = py - lastPY;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) hasDragged = true;
+      velY = dx * 0.42;
+      velX = -dy * 0.42;
+      rotY += velY;
+      rotX = Math.max(-78, Math.min(78, rotX + velX));
+      lastPX = px; lastPY = py;
+      applyTransform();
     }
 
-    // ─── GRAVITY SOURCE ───────────────────────────────────────────────────────
-    let gravX = 0, gravY = GRAVITY_BASE;  // overridden by gyro
-
-    // Mouse / touch fallback (desktop: gravity toward cursor)
-    let mouseX = null, mouseY = null;
-    const MOUSE_PULL = 0.18;
-
-    window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-    window.addEventListener('mouseleave', () => { mouseX = mouseY = null; });
-
-    // ─── GYROSCOPE ────────────────────────────────────────────────────────────
-    let hasGyro = false;
-
-    function onOrientation(e) {
-      if (e.gamma == null) return;
-      hasGyro = true;
-      // gamma: -90..90 (left-right tilt), beta: -180..180 (front-back tilt)
-      gravX = Math.max(-1, Math.min(1, e.gamma / 45)) * GRAVITY_BASE * 2.5;
-      gravY = Math.max(-1, Math.min(1, e.beta  / 45)) * GRAVITY_BASE * 2.5;
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      lastDragEnd = Date.now();
+      cube.classList.remove('dragging');
+      raf = requestAnimationFrame(animStep);
     }
 
-    function setupGyro() {
-      if (typeof DeviceOrientationEvent === 'undefined') return;
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // iOS 13+ – need user gesture
-        const overlay = document.getElementById('permOverlay');
-        overlay.classList.remove('hidden');
-        document.getElementById('permBtn').addEventListener('click', () => {
-          DeviceOrientationEvent.requestPermission().then(state => {
-            if (state === 'granted') window.addEventListener('deviceorientation', onOrientation);
-            overlay.classList.add('hidden');
-          }).catch(() => overlay.classList.add('hidden'));
-        });
+    function animStep() {
+      const idle = !dragging && (Date.now() - lastDragEnd > IDLE_AFTER);
+      if (idle) {
+        velX *= 0.94;
+        velY = velY * 0.94 + AUTO_SPEED * 0.06;
       } else {
-        window.addEventListener('deviceorientation', onOrientation);
+        velX *= 0.91;
+        velY *= 0.91;
       }
+      rotY += velY;
+      rotX = Math.max(-78, Math.min(78, rotX + velX));
+      applyTransform();
+      raf = requestAnimationFrame(animStep);
     }
 
-    // ─── PARTICLES ────────────────────────────────────────────────────────────
-    const particles = [];
+    // Mouse
+    cube.addEventListener('mousedown',  e => { onDown(e.clientX, e.clientY); e.preventDefault(); });
+    document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+    document.addEventListener('mouseup',   () => onUp());
 
-    function burst(x, y, color, n = 22) {
-      for (let i = 0; i < n; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 2 + Math.random() * 6;
-        particles.push({
-          x, y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 2,
-          life: 1,
-          decay: 0.02 + Math.random() * 0.025,
-          r: 2 + Math.random() * 3,
-          color,
-        });
-      }
-    }
+    // Touch
+    cube.addEventListener('touchstart',  e => { onDown(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchmove', e => { onMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchend', () => onUp());
 
-    // ─── DESKTOP CLICK ────────────────────────────────────────────────────────
-    canvas.addEventListener('click', e => {
-      const mx = e.clientX, my = e.clientY;
-      BTNS.forEach(btn => {
-        if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
-          triggerButton(btn);
-        }
-      });
+    // Prevent accidental link opens on drag
+    cube.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', e => { if (hasDragged) e.preventDefault(); });
     });
 
-    function triggerButton(btn) {
-      if (btn.cooldown > 0) return;
-      btn.press    = 1;
-      btn.cooldown = 90;
-      // bounce ball away
-      ball.vy = -13;
-      ball.vx += (Math.random() - 0.5) * 8;
-      burst(btn.x + btn.w / 2, btn.y + btn.h / 2, btn.social.color);
-      setTimeout(() => window.open(btn.social.url, '_blank'), 350);
-    }
-
-    // ─── COLLISION: ball ↔ button ─────────────────────────────────────────────
-    function collideBallButton(btn) {
-      // closest point on rect to ball center
-      const cx = Math.max(btn.x, Math.min(ball.x, btn.x + btn.w));
-      const cy = Math.max(btn.y, Math.min(ball.y, btn.y + btn.h));
-      const dx = ball.x - cx;
-      const dy = ball.y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist >= BALL_R) return false;
-
-      // push ball out
-      const nx = dist === 0 ? 0 : dx / dist;
-      const ny = dist === 0 ? -1 : dy / dist;
-      ball.x = cx + nx * BALL_R;
-      ball.y = cy + ny * BALL_R;
-
-      // reflect velocity
-      const dot = ball.vx * nx + ball.vy * ny;
-      ball.vx = (ball.vx - 2 * dot * nx) * BOUNCE;
-      ball.vy = (ball.vy - 2 * dot * ny) * BOUNCE;
-
-      btn.glow = Math.min(1, btn.glow + 0.4);
-
-      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      if (speed > 2.5) triggerButton(btn);
-
-      return true;
-    }
-
-    // ─── UPDATE ───────────────────────────────────────────────────────────────
-    function update() {
-      // Compute gravity
-      let ax = gravX;
-      let ay = gravY;
-
-      // Desktop: add mouse pull when no gyro
-      if (!hasGyro && mouseX !== null) {
-        const dx = mouseX - ball.x;
-        const dy = mouseY - ball.y;
-        const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-        ax += (dx / d) * MOUSE_PULL * Math.min(d / 200, 1);
-        ay += (dy / d) * MOUSE_PULL * Math.min(d / 200, 1);
-      }
-
-      ball.vx = (ball.vx + ax) * FRICTION;
-      ball.vy = (ball.vy + ay) * FRICTION;
-      ball.x += ball.vx;
-      ball.y += ball.vy;
-
-      // Wall bounce
-      if (ball.x - BALL_R < 0)  { ball.x = BALL_R;     ball.vx *= -BOUNCE; }
-      if (ball.x + BALL_R > W)  { ball.x = W - BALL_R; ball.vx *= -BOUNCE; }
-      if (ball.y - BALL_R < 0)  { ball.y = BALL_R;     ball.vy *= -BOUNCE; }
-      if (ball.y + BALL_R > H)  { ball.y = H - BALL_R; ball.vy *= -BOUNCE; }
-
-      // Button collisions
-      BTNS.forEach(collideBallButton);
-
-      // Trail
-      trail.unshift({ x: ball.x, y: ball.y });
-      if (trail.length > 18) trail.pop();
-
-      // Decay button states
-      BTNS.forEach(btn => {
-        btn.glow     = Math.max(0, btn.glow - 0.04);
-        btn.press    = Math.max(0, btn.press - 0.04);
-        if (btn.cooldown > 0) btn.cooldown--;
-      });
-
-      // Particles
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x  += p.vx;
-        p.y  += p.vy;
-        p.vy += 0.18;
-        p.vx *= 0.97;
-        p.life -= p.decay;
-        if (p.life <= 0) particles.splice(i, 1);
-      }
-    }
-
-    // ─── DRAW ─────────────────────────────────────────────────────────────────
-    function drawRoundRect(x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.arcTo(x + w, y,     x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x,     y + h, r);
-      ctx.arcTo(x,     y + h, x,     y,     r);
-      ctx.arcTo(x,     y,     x + w, y,     r);
-      ctx.closePath();
-    }
-
-    function drawButtons() {
-      BTNS.forEach(btn => {
-        const { x, y, w, h, social, glow, press } = btn;
-        const yOff = press * 4; // press-down shift
-
-        ctx.save();
-        ctx.translate(0, yOff);
-
-        // Shadow/glow
-        ctx.shadowColor = social.color;
-        ctx.shadowBlur  = 8 + glow * 28 + press * 20;
-
-        // Background
-        drawRoundRect(x, y, w, h, BTN_R);
-        ctx.fillStyle = `rgba(10,10,20,0.88)`;
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = social.color;
-        ctx.lineWidth   = 1.5 + glow * 1.5;
-        ctx.stroke();
-
-        // Pressed fill
-        if (press > 0) {
-          drawRoundRect(x, y, w, h, BTN_R);
-          ctx.fillStyle = social.color + Math.floor(press * 60).toString(16).padStart(2, '0');
-          ctx.fill();
-        }
-
-        ctx.shadowBlur = 0;
-
-        // Corner brackets decoration
-        const bLen = 12, bW = 1.5;
-        ctx.strokeStyle = social.color;
-        ctx.lineWidth   = bW;
-        ctx.globalAlpha = 0.5 + glow * 0.5;
-        [
-          [x + 6,     y + 6,      bLen, 0,    0,    bLen],  // top-left
-          [x + w - 6, y + 6,      -bLen, 0,   0,    bLen],  // top-right
-          [x + 6,     y + h - 6,  bLen, 0,    0,    -bLen], // bot-left
-          [x + w - 6, y + h - 6,  -bLen, 0,   0,    -bLen], // bot-right
-        ].forEach(([sx, sy, ex1, ey1, ex2, ey2]) => {
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + ex1, sy + ey1); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + ex2, sy + ey2); ctx.stroke();
-        });
-        ctx.globalAlpha = 1;
-
-        // Label
-        ctx.textAlign    = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor  = social.color;
-        ctx.shadowBlur   = 6 + glow * 10;
-
-        ctx.fillStyle = '#fff';
-        ctx.font      = `bold ${Math.round(h * 0.3)}px 'Courier New', monospace`;
-        ctx.fillText(social.label, x + w / 2, y + h / 2 - h * 0.13);
-
-        ctx.fillStyle = social.color;
-        ctx.font      = `${Math.round(h * 0.2)}px 'Courier New', monospace`;
-        ctx.fillText(social.handle, x + w / 2, y + h / 2 + h * 0.18);
-
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      });
-    }
-
-    function drawTrail() {
-      trail.forEach((pt, i) => {
-        const alpha = (1 - i / trail.length) * 0.35;
-        const r     = BALL_R * (1 - i / trail.length) * 0.7;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0,255,200,${alpha})`;
-        ctx.fill();
-      });
-    }
-
-    function drawBall() {
-      // Outer glow
-      ctx.shadowColor = '#00ffc8';
-      ctx.shadowBlur  = 24;
-
-      // Gradient sphere
-      const g = ctx.createRadialGradient(
-        ball.x - BALL_R * 0.35, ball.y - BALL_R * 0.35, BALL_R * 0.1,
-        ball.x, ball.y, BALL_R
-      );
-      g.addColorStop(0.0, '#ffffff');
-      g.addColorStop(0.3, '#00ffc8');
-      g.addColorStop(0.7, '#00aaff');
-      g.addColorStop(1.0, '#0044aa00');
-
-      ctx.beginPath();
-      ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Specular highlight
-      ctx.beginPath();
-      ctx.arc(ball.x - BALL_R * 0.3, ball.y - BALL_R * 0.3, BALL_R * 0.22, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fill();
-    }
-
-    function drawParticles() {
-      particles.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur  = 6;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      });
-      ctx.globalAlpha = 1;
-    }
-
-    function drawHUD() {
-      // Title
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor  = '#00ffc8';
-      ctx.shadowBlur   = 14;
-      ctx.fillStyle    = '#ffffff';
-      ctx.font         = `bold ${Math.min(32, W * 0.085)}px 'Courier New', monospace`;
-      ctx.fillText('ward_sentry', W / 2, H * 0.1);
-
-      // Hint
-      ctx.shadowBlur  = 0;
-      ctx.fillStyle   = '#ffffff44';
-      ctx.font        = `${Math.min(12, W * 0.032)}px 'Courier New', monospace`;
-      const hint = hasGyro
-        ? 'наклоняй телефон — закати мяч на ссылку'
-        : 'двигай мышью или кликай на кнопку';
-      ctx.fillText(hint, W / 2, H * 0.1 + Math.min(32, W * 0.085) * 0.9);
-
-      ctx.shadowBlur = 0;
-    }
-
-    // ─── MAIN LOOP ────────────────────────────────────────────────────────────
-    let lastTime = 0;
-    function loop(ts) {
-      const dt = Math.min(ts - lastTime, 50); // cap at 50ms
-      lastTime = ts;
-
-      // Fixed-step update (up to 2 steps per frame)
-      const steps = Math.round(dt / 16.67) || 1;
-      for (let i = 0; i < Math.min(steps, 2); i++) update();
-
-      ctx.clearRect(0, 0, W, H);
-
-      drawHUD();
-      drawButtons();
-      drawParticles();
-      drawTrail();
-      drawBall();
-
-      requestAnimationFrame(loop);
-    }
-
-    // ─── INIT ─────────────────────────────────────────────────────────────────
-    window.addEventListener('resize', () => { resize(); resetBall(); });
-    resize();
-    resetBall();
-    setupGyro();
-    requestAnimationFrame(loop);
+    // Auto-rotate start
+    lastDragEnd = Date.now() - IDLE_AFTER;
+    raf = requestAnimationFrame(animStep);
   })();
   </script>
 </body>
