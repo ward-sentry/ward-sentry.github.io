@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTProxy</title>
+<style>
+  :root {
+    --bg: #0d0d12;
+    --border: #252535;
+    --accent: #2aabee;
+    --green: #3ddc84;
+    --red: #ff5c5c;
+    --yellow: #ffc043;
+    --text: #dde1e7;
+    --muted: #666880;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 32px 24px; max-width: 900px; margin: 0 auto;
+  }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 1.4rem; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 10px; }
+  h1 svg { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+  .meta b { color: var(--text); }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .stat { color: var(--muted); font-size: 0.83rem; }
+  .stat b { color: var(--text); }
+
+  button {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: #fff; border: none;
+    padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    font-size: 0.83rem; font-weight: 500; transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .35; cursor: default; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+  button.sm { padding: 4px 11px; font-size: 0.78rem; border-radius: 6px; }
+  button.open-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  button.open-btn:hover { background: rgba(42,171,238,.12); opacity: 1; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; padding: 8px 12px; color: var(--muted);
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: .06em;
+    border-bottom: 1px solid var(--border); font-weight: 500;
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.875rem; vertical-align: middle; }
+  tr:hover td { background: rgba(255,255,255,.025); }
+  .col-num { color: var(--muted); width: 36px; font-variant-numeric: tabular-nums; }
+  .col-server { font-weight: 500; }
+  .col-server .port { color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-left: 4px; }
+  .col-status { width: 150px; }
+  .col-actions { width: 140px; text-align: right; }
+
+  .badge { display: inline-flex; align-items: center; gap: 7px; font-size: 0.8rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-idle     { background: var(--border); }
+  .dot-up       { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .dot-down     { background: var(--red); }
+  .dot-checking { background: var(--yellow); animation: pulse .9s ease-in-out infinite; }
+  .dot-timeout  { background: var(--muted); }
+  .ping { color: var(--muted); }
+  .ping.fast { color: var(--green); }
+  .ping.mid  { color: var(--yellow); }
+  .ping.slow { color: var(--red); }
+
+  #loading {
+    text-align: center; padding: 60px 0; color: var(--muted); font-size: 0.9rem;
+  }
+  #loading .spinner {
+    width: 28px; height: 28px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite; margin: 0 auto 16px;
+  }
+  .error-msg { color: var(--red); padding: 20px; font-size: 0.9rem; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  @keyframes spin   { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    MTProxy
+  </h1>
+  <div class="meta" id="meta">Загрузка...</div>
+</header>
+
+<div class="toolbar">
+  <button id="btnCheckAll" onclick="checkAll()" disabled>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-1.61"/></svg>
+    Проверить все
+  </button>
+  <button class="ghost" onclick="resetAll()">Сбросить</button>
+  <span class="spacer"></span>
+  <span class="stat" id="statLabel"></span>
+</div>
+
+<div id="root"><div id="loading"><div class="spinner"></div>Загружаем прокси...</div></div>
+
+<script>
+const SOURCES = [
+  'https://raw.githubusercontent.com/kort0881/telegram-proxy-collector/main/proxy_ru.txt',
+  'https://raw.githubusercontent.com/kort0881/telegram-proxy-collector/main/proxy_all.txt',
+  'https://raw.githubusercontent.com/kort0881/telegram-proxy-collector/main/proxy_eu.txt',
+  'https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt',
+];
+const TIMEOUT = 5000;
+const BATCH   = 6;
+const RELOAD_INTERVAL = 60 * 60 * 1000; // 1 час
+
+let proxies  = [];
+let checking = false;
+let sortByPing = false;
+let nextReload;
+
+// ── Fetch & parse ──────────────────────────────────────────────────────────
+function parseLines(text) {
+  return text.split('\n')
+    .map(l => l.replace(/#.*$/, '').trim())   // убираем комментарии
+    .filter(l => l.startsWith('http') || l.startsWith('tg://proxy'));
+}
+
+function proxyKey(url) {
+  // дедупликация по server+port+secret, не зависит от схемы
+  const qs = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
+  const s = (qs.get('server') || '').replace(/\.$/, '').toLowerCase();
+  return `${s}:${qs.get('port')}:${qs.get('secret')}`;
+}
+
+async function loadProxies() {
+  document.getElementById('root').innerHTML =
+    '<div id="loading"><div class="spinner"></div>Загружаем прокси...</div>';
+  document.getElementById('meta').textContent = 'Загрузка...';
+  document.getElementById('btnCheckAll').disabled = true;
+
+  try {
+    const ts = '?_=' + Date.now();
+    const results = await Promise.allSettled(
+      SOURCES.map(src => fetch(src + ts).then(r => r.text()))
+    );
+
+    const seen = new Set();
+    const urls = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        for (const url of parseLines(r.value)) {
+          const key = proxyKey(url);
+          if (key && !seen.has(key)) { seen.add(key); urls.push(url); }
+        }
+      }
+    }
+
+    proxies = urls.map((url, i) => {
+      const qs = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
+      return {
+        id: i, url,
+        server: (qs.get('server') || url).replace(/\.$/, ''),
+        port:   qs.get('port') || '443',
+        status: 'idle', ping: null,
+      };
+    });
+
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    scheduleNextReload();
+    updateMeta(ok);
+    updateStats();
+    document.getElementById('btnCheckAll').disabled = false;
+    render();
+  } catch (e) {
+    document.getElementById('root').innerHTML =
+      `<div class="error-msg">Не удалось загрузить список: ${e.message}</div>`;
+    document.getElementById('meta').textContent = 'Ошибка загрузки';
+    setTimeout(loadProxies, 30_000);
+  }
+}
+
+function scheduleNextReload() {
+  clearTimeout(nextReload);
+  nextReload = setTimeout(() => {
+    sortByPing = false;
+    loadProxies();
+  }, RELOAD_INTERVAL);
+}
+
+function updateMeta(sourcesOk) {
+  const now  = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  const next = new Date(Date.now() + RELOAD_INTERVAL).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+  const srcNote = sourcesOk != null && sourcesOk < SOURCES.length
+    ? ` · источников загружено: ${sourcesOk}/${SOURCES.length}`
+    : '';
+  document.getElementById('meta').innerHTML =
+    `<b>${proxies.length}</b> уникальных прокси · обновлено в ${now} · следующее в ${next}${srcNote}`;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function sorted() {
+  if (!sortByPing) return proxies;
+  return [...proxies].sort((a, b) => {
+    if (a.ping != null && b.ping != null) return a.ping - b.ping;
+    if (a.ping != null) return -1;
+    if (b.ping != null) return  1;
+    const aC = a.status !== 'idle' && a.status !== 'checking';
+    const bC = b.status !== 'idle' && b.status !== 'checking';
+    return aC === bC ? a.id - b.id : aC ? -1 : 1;
+  });
+}
+
+function render() {
+  const list = sorted();
+  const sortIcon = sortByPing
+    ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 5h10M11 9h7M11 13h4"/><polyline points="3 8 6 5 9 8"/><line x1="6" y1="5" x2="6" y2="19"/></svg> По пингу`
+    : `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> По порядку`;
+
+  const rows = list.map((p, pos) => `
+    <tr id="r${p.id}">
+      <td class="col-num">${pos + 1}</td>
+      <td class="col-server">${esc(p.server)}<span class="port">:${p.port}</span></td>
+      <td class="col-status" id="s${p.id}">${badge(p)}</td>
+      <td class="col-actions">
+        <a href="${esc(p.url)}" target="_blank" style="text-decoration:none">
+          <button class="sm open-btn">Открыть</button>
+        </a>
+        &nbsp;
+        <button class="sm ghost" onclick="checkOne(${p.id})">Пинг</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('root').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Сервер</th>
+        <th style="cursor:pointer;user-select:none" onclick="toggleSort()">
+          Статус &nbsp;<span style="opacity:.6;font-size:.9em">${sortIcon}</span>
+        </th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function badge(p) {
+  const dots = {idle:'dot-idle',up:'dot-up',down:'dot-down',checking:'dot-checking',timeout:'dot-timeout'};
+  const dot = `<span class="dot ${dots[p.status] || 'dot-idle'}"></span>`;
+  let label = '';
+  if (p.status === 'idle')     label = `<span class="ping">—</span>`;
+  if (p.status === 'checking') label = `<span class="ping">...</span>`;
+  if (p.status === 'up')       label = `<span class="ping ${pingClass(p.ping)}">${p.ping} ms</span>`;
+  if (p.status === 'down')     label = `<span class="ping" style="color:var(--red)">недоступен</span>`;
+  if (p.status === 'timeout')  label = `<span class="ping">таймаут</span>`;
+  return `<span class="badge">${dot}${label}</span>`;
+}
+
+function pingClass(ms) {
+  if (ms == null) return '';
+  if (ms < 300) return 'fast';
+  if (ms < 900) return 'mid';
+  return 'slow';
+}
+
+function updateRow(id) {
+  if (sortByPing) { render(); return; }
+  const el = document.getElementById(`s${id}`);
+  if (el) el.innerHTML = badge(proxies[id]);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Ping ───────────────────────────────────────────────────────────────────
+function probe(server, port) {
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    let done = false;
+    const finish = (up) => {
+      if (done) return; done = true;
+      clearTimeout(timer);
+      const ms = Math.round(performance.now() - t0);
+      resolve(up ? {status:'up', ping:ms} : {status:'timeout', ping:null});
+    };
+    const timer = setTimeout(() => finish(false), TIMEOUT);
+    try {
+      const ws = new WebSocket(`ws://${server}:${port}`);
+      ws.onopen = () => { ws.close(); finish(true); };
+      ws.onerror = () => { if (performance.now() - t0 < 1800) finish(true); };
+    } catch(_) {}
+    fetch(`https://${server}:${port}/`, {mode:'no-cors', signal:AbortSignal.timeout(TIMEOUT)})
+      .then(() => finish(true)).catch(() => {});
+  });
+}
+
+async function checkProxy(p) {
+  p.status = 'checking'; p.ping = null;
+  updateRow(p.id);
+  const r = await probe(p.server, p.port);
+  p.status = r.status; p.ping = r.ping;
+  updateRow(p.id);
+}
+
+async function checkOne(id) {
+  await checkProxy(proxies[id]);
+  updateStats();
+}
+
+async function checkAll() {
+  if (checking) return;
+  checking = true;
+  const btn = document.getElementById('btnCheckAll');
+  btn.disabled = true; btn.textContent = 'Проверяю…';
+  for (let i = 0; i < proxies.length; i += BATCH) {
+    await Promise.all(proxies.slice(i, i + BATCH).map(p => checkProxy(p)));
+    updateStats();
+  }
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-1.61"/></svg> Проверить все`;
+  checking = false;
+}
+
+function resetAll() {
+  if (checking) return;
+  proxies.forEach(p => { p.status = 'idle'; p.ping = null; });
+  render();
+  updateStats();
+}
+
+function toggleSort() {
+  sortByPing = !sortByPing;
+  render();
+}
+
+function updateStats() {
+  const up = proxies.filter(p => p.status === 'up').length;
+  const checked = proxies.filter(p => p.status !== 'idle' && p.status !== 'checking').length;
+  const el = document.getElementById('statLabel');
+  el.innerHTML = checked === 0
+    ? `<b>${proxies.length}</b> серверов`
+    : `<b>${proxies.length}</b> серверов &nbsp;·&nbsp; ✓ <b style="color:var(--green)">${up}</b> доступны`;
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+loadProxies();
+</script>
+</body>
+</html>
