@@ -402,9 +402,32 @@
     document.addEventListener('mouseup',   () => onUp());
 
     // Touch
-    cube.addEventListener('touchstart',  e => { onDown(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
-    document.addEventListener('touchmove', e => { onMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
-    document.addEventListener('touchend', () => onUp());
+    cube.addEventListener('touchstart', e => {
+      onDown(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchmove', e => {
+      onMove(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchend', e => {
+      const wasDrag = hasDragged;
+      onUp();
+      // if it was a tap (no drag) — navigate the link manually
+      // because preventDefault() on touchstart suppresses the synthetic click
+      if (!wasDrag && e.changedTouches.length) {
+        const t = e.changedTouches[0];
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const link = el && el.closest('a.face');
+        if (link) {
+          link.target === '_blank'
+            ? window.open(link.href, '_blank', 'noopener')
+            : (window.location.href = link.href);
+        }
+      }
+    });
 
     // Prevent accidental link opens on drag
     cube.querySelectorAll('a').forEach(a => {
