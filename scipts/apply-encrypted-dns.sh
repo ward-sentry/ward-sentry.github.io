@@ -165,12 +165,16 @@ remove_old_dns() {
 
 	echo "$DOH_REMOVE" | while read -r url; do
 		[ -n "${url:-}" ] || continue
-		run_ndm "no ip name-server $url" || true
+		run_ndm "no dns-proxy https upstream $url" || true
+		run_ndm "dns-proxy no https upstream $url" || true
+		run_ndm "no https upstream $url" || true
 	done
 
 	echo "$DOT_REMOVE" | while read -r ip host; do
 		[ -n "${ip:-}" ] || continue
-		run_ndm "no ip name-server $ip tls $host" || true
+		run_ndm "no dns-proxy tls upstream $ip" || true
+		run_ndm "dns-proxy no tls upstream $ip" || true
+		run_ndm "no tls upstream $ip" || true
 	done
 }
 
@@ -179,7 +183,11 @@ add_doh() {
 
 	echo "$DOH_ADD" | while read -r url; do
 		[ -n "${url:-}" ] || continue
-		run_ndm "ip name-server $url"
+		if run_ndm "dns-proxy https upstream $url dnsm"; then
+			:
+		else
+			run_ndm "https upstream $url dnsm"
+		fi
 	done
 }
 
@@ -188,7 +196,11 @@ add_dot_fallback() {
 
 	echo "$DOT_ADD" | while read -r ip host; do
 		[ -n "${ip:-}" ] || continue
-		run_ndm "ip name-server $ip tls $host"
+		if run_ndm "dns-proxy tls upstream $ip sni $host"; then
+			:
+		else
+			run_ndm "tls upstream $ip sni $host"
+		fi
 	done
 }
 

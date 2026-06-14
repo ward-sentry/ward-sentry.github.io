@@ -80,8 +80,8 @@ During cleanup, Keenetic may print `no such server` for DNS servers that were no
 Expected Keenetic CLI commands look like this:
 
 ```text
-ip name-server https://dns.cloudflare.com/dns-query
-ip name-server 1.1.1.1 tls cloudflare-dns.com
+dns-proxy https upstream https://dns.cloudflare.com/dns-query dnsm
+dns-proxy tls upstream 1.1.1.1 sni cloudflare-dns.com
 ```
 
 ## Backup
