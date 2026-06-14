@@ -4,6 +4,7 @@ Depends: libc, libssp, librt, libpthread
 Provides: chur-amneziawg-go-any
 Source: feeds/base/chur/chur-amneziawg-go
 SourceName: chur-amneziawg-go
+License: MIT
 Section: net
 SourceDateEpoch: 1781460811
 URL: https://github.com/amnezia-vpn/amneziawg-go
@@ -13,9 +14,9 @@ Installed-Size: 3686400
 Description:  AmneziaWG userspace implementation built from the official upstream
  amnezia-vpn/amneziawg-go repository pinned by Chur Keenetic.
 Filename: chur-amneziawg-go_f4f4c99-1_mipsel-3.4.ipk
-Size: 1347456
-SHA256sum: ef569c76ae545274ec8720747192cc7d1b3d445184a41d92982de736707807ed
-MD5Sum: 63bfd8ebe150ee430a90efdea065c2a4
+Size: 1347467
+SHA256sum: 29fa09b90b30fa9bddc65836dd3c1f3ab9883811d9b5c69aff7fa959148f6457
+MD5Sum: baab297dd8cfbe7236b3c3cdbc416f6a
 
 Package: chur-amneziawg-tools
 Version: 1.0.20260223-2
@@ -40,11 +41,12 @@ SHA256sum: 6ab652ea6cf742ac67dbd5892750a24353b0d5fcfe4fb1b12724e35cd2cb1d7b
 MD5Sum: 7c892e22bf3a365c326b5a87327bbef2
 
 Package: chur-amneziawg
-Version: 0.1.0-1
+Version: 1.0.0-1
 Depends: libc, libssp, librt, libpthread, chur-amneziawg-go, chur-amneziawg-tools
 Provides: chur-amneziawg-any
 Source: feeds/base/chur/chur-amneziawg
 SourceName: chur-amneziawg
+License: Chur-Keenetic-Attribution-1.0
 Section: net
 SourceDateEpoch: 1781460811
 URL: https://github.com/ward-sentry/chur-keenetic
@@ -53,27 +55,28 @@ Architecture: mipsel-3.4
 Installed-Size: 10240
 Description:  Meta package that installs all AmneziaWG runtime dependencies required by
  Chur Keenetic.
-Filename: chur-amneziawg_0.1.0-1_mipsel-3.4.ipk
-Size: 813
-SHA256sum: bee673c398225c46e3a8ca80a5f2b295960ca8c558661056b8f43f27e1ffd861
-MD5Sum: e2674cf06fda077bc37a677d52d5d632
+Filename: chur-amneziawg_1.0.0-1_mipsel-3.4.ipk
+Size: 838
+SHA256sum: 3836b376d686427b587c450d2e4e8103bf05315801c33320ee76498ecd3661a9
+MD5Sum: 0b8339d01294a38eba71c92967881ab0
 
 Package: chur-keenetic
-Version: 0.1.0-23
+Version: 1.0.0-1
 Depends: libc, libssp, librt, libpthread
 Provides: chur-keenetic-any
 Source: feeds/base/chur/chur-keenetic
 SourceName: chur-keenetic
+License: Chur-Keenetic-Attribution-1.0
 Section: net
 SourceDateEpoch: 1781460811
 URL: https://github.com/ward-sentry/chur-keenetic
 Maintainer: Chur Keenetic
 Architecture: mipsel-3.4
-Installed-Size: 7301120
+Installed-Size: 7372800
 Description:  Chur Keenetic web manager. Installs the manager binary and an Entware
  init script that starts the web UI on port 8088.
-Filename: chur-keenetic_0.1.0-23_mipsel-3.4.ipk
-Size: 2568344
-SHA256sum: 42a07327f41a6766e924ef5773bac8c962e0374827372a944ac1c18cdeee7232
-MD5Sum: bc065a32f5a32fc2e7206375977f25ee
+Filename: chur-keenetic_1.0.0-1_mipsel-3.4.ipk
+Size: 2568527
+SHA256sum: fb3e37eeabffadda4760473d014926c70ef02974324a98723e5444019e7ba4f2
+MD5Sum: 3d45683b3f0e9f9d1120a0bf11eee406
 
