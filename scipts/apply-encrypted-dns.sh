@@ -165,12 +165,12 @@ remove_old_dns() {
 
 	echo "$DOH_REMOVE" | while read -r url; do
 		[ -n "${url:-}" ] || continue
-		run_ndm "no ip name-server https $url" || true
+		run_ndm "no ip name-server $url" || true
 	done
 
 	echo "$DOT_REMOVE" | while read -r ip host; do
 		[ -n "${ip:-}" ] || continue
-		run_ndm "no ip name-server tls $ip $host" || true
+		run_ndm "no ip name-server $ip tls $host" || true
 	done
 }
 
@@ -179,7 +179,7 @@ add_doh() {
 
 	echo "$DOH_ADD" | while read -r url; do
 		[ -n "${url:-}" ] || continue
-		run_ndm "ip name-server https $url"
+		run_ndm "ip name-server $url"
 	done
 }
 
@@ -188,7 +188,7 @@ add_dot_fallback() {
 
 	echo "$DOT_ADD" | while read -r ip host; do
 		[ -n "${ip:-}" ] || continue
-		run_ndm "ip name-server tls $ip $host"
+		run_ndm "ip name-server $ip tls $host"
 	done
 }
 

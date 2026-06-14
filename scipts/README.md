@@ -73,6 +73,17 @@ nslookup openai.com 192.168.1.1
 
 Replace `192.168.1.1` with your router IP if needed.
 
+## Notes
+
+During cleanup, Keenetic may print `no such server` for DNS servers that were not configured before. That is OK.
+
+Expected Keenetic CLI commands look like this:
+
+```text
+ip name-server https://dns.cloudflare.com/dns-query
+ip name-server 1.1.1.1 tls cloudflare-dns.com
+```
+
 ## Backup
 
 Before changing settings, the script saves:
