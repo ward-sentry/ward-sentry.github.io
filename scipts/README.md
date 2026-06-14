@@ -1,98 +1,89 @@
-# Keenetic encrypted DNS script
+# Keenetic Encrypted DNS
 
-This script configures encrypted DNS on KeeneticOS from the BusyBox/Entware shell.
+Install KeeneticOS components first:
 
-It adds only these upstreams:
+- DNS-over-HTTPS
+- DNS-over-TLS
 
-- DoH: Cloudflare
-- DoH: Quad9
-- DoH: AdGuard unfiltered
-- DoT fallback: Cloudflare, Quad9, AdGuard unfiltered
+Use DoH first. Use DoT as fallback.
 
-The script uses Keenetic's native command client, usually `ndmc` or `ndmq`. It does not require OpenWrt `uci`.
+## DoH
 
-## Download and run on router
+DoH:
 
-SSH into the router as `root`, then run:
-
-```sh
-cd /tmp
-wget -O apply-encrypted-dns.sh https://ward-sentry.github.io/scipts/apply-encrypted-dns.sh
-chmod +x apply-encrypted-dns.sh
-./apply-encrypted-dns.sh
+```text
+DNS_URL: https://dns.cloudflare.com/dns-query
 ```
 
-If `wget` has TLS/certificate issues, try:
+DoH:
 
-```sh
-cd /tmp
-curl -L -o apply-encrypted-dns.sh https://ward-sentry.github.io/scipts/apply-encrypted-dns.sh
-chmod +x apply-encrypted-dns.sh
-./apply-encrypted-dns.sh
+```text
+DNS_URL: https://dns.quad9.net/dns-query
 ```
 
-## Dry run
+DoH:
 
-To print commands without applying them:
-
-```sh
-cd /tmp
-DRY_RUN=1 ./apply-encrypted-dns.sh
+```text
+DNS_URL: https://unfiltered.adguard-dns.com/dns-query
 ```
 
-## Requirements
+## DoT Fallback
 
-The router shell should have one of these Keenetic command clients:
+DoT:
 
-- `ndmc`
-- `ndmq`
-
-Check:
-
-```sh
-which ndmc
-which ndmq
+```text
+DNS_URL: 1.1.1.1
+DOMAIN_TLS: cloudflare-dns.com
 ```
 
-If both are missing, the script cannot change native Keenetic DNS settings from the shell.
+DoT:
 
-## Check
-
-After running the script:
-
-```sh
-ps | grep -Ei 'stubby|dotproxy|dnsmasq|https' | grep -v grep
-cat /tmp/run/dotproxy-*.yml 2>/dev/null
+```text
+DNS_URL: 1.0.0.1
+DOMAIN_TLS: cloudflare-dns.com
 ```
 
-You can also check from a LAN client:
+DoT:
 
-```sh
-nslookup openai.com 192.168.1.1
+```text
+DNS_URL: 9.9.9.9
+DOMAIN_TLS: dns.quad9.net
 ```
 
-Replace `192.168.1.1` with your router IP if needed.
+DoT:
 
-## Notes
+```text
+DNS_URL: 149.112.112.112
+DOMAIN_TLS: dns.quad9.net
+```
 
-During cleanup, Keenetic may print `no such server` for DNS servers that were not configured before. That is OK.
+DoT:
 
-Expected Keenetic CLI commands look like this:
+```text
+DNS_URL: 94.140.14.140
+DOMAIN_TLS: unfiltered.adguard-dns.com
+```
+
+DoT:
+
+```text
+DNS_URL: 94.140.14.141
+DOMAIN_TLS: unfiltered.adguard-dns.com
+```
+
+## Keenetic CLI Format
 
 ```text
 dns-proxy
 https upstream https://dns.cloudflare.com/dns-query dnsm
+https upstream https://dns.quad9.net/dns-query dnsm
+https upstream https://unfiltered.adguard-dns.com/dns-query dnsm
 tls upstream 1.1.1.1 sni cloudflare-dns.com
+tls upstream 1.0.0.1 sni cloudflare-dns.com
+tls upstream 9.9.9.9 sni dns.quad9.net
+tls upstream 149.112.112.112 sni dns.quad9.net
+tls upstream 94.140.14.140 sni unfiltered.adguard-dns.com
+tls upstream 94.140.14.141 sni unfiltered.adguard-dns.com
 exit
 system configuration save
 ```
-
-## Backup
-
-Before changing settings, the script saves:
-
-```text
-/opt/var/backups/keenetic-dns-YYYYMMDD-HHMMSS/running-config.txt
-```
-
-Use that file as a reference if you need to restore the previous DNS settings manually.
