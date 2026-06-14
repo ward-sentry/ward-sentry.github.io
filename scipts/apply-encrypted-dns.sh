@@ -160,52 +160,49 @@ run_ndm_capture() {
 	esac
 }
 
-remove_old_dns() {
-	echo "Removing known encrypted DNS upstreams..."
+run_ndm_script() {
+	script="$1"
 
-	echo "$DOH_REMOVE" | while read -r url; do
-		[ -n "${url:-}" ] || continue
-		run_ndm "no dns-proxy https upstream $url" || true
-		run_ndm "dns-proxy no https upstream $url" || true
-		run_ndm "no https upstream $url" || true
-	done
+	if [ "$DRY_RUN" = "1" ]; then
+		printf '%s\n' "$script" | sed 's/^/+ /'
+		return 0
+	fi
 
-	echo "$DOT_REMOVE" | while read -r ip host; do
-		[ -n "${ip:-}" ] || continue
-		run_ndm "no dns-proxy tls upstream $ip" || true
-		run_ndm "dns-proxy no tls upstream $ip" || true
-		run_ndm "no tls upstream $ip" || true
-	done
+	printf '%s\n' "$script" | "$NDM_BIN"
 }
 
-add_doh() {
-	echo "Adding DoH upstreams..."
+build_dns_proxy_script() {
+	{
+		echo "dns-proxy"
 
-	echo "$DOH_ADD" | while read -r url; do
-		[ -n "${url:-}" ] || continue
-		if run_ndm "dns-proxy https upstream $url dnsm"; then
-			:
-		else
-			run_ndm "https upstream $url dnsm"
-		fi
-	done
+		echo "$DOH_REMOVE" | while read -r url; do
+			[ -n "${url:-}" ] || continue
+			echo "no https upstream $url"
+		done
+
+		echo "$DOT_REMOVE" | while read -r ip host; do
+			[ -n "${ip:-}" ] || continue
+			echo "no tls upstream $ip"
+		done
+
+		echo "$DOH_ADD" | while read -r url; do
+			[ -n "${url:-}" ] || continue
+			echo "https upstream $url dnsm"
+		done
+
+		echo "$DOT_ADD" | while read -r ip host; do
+			[ -n "${ip:-}" ] || continue
+			echo "tls upstream $ip sni $host"
+		done
+
+		echo "exit"
+		echo "system configuration save"
+	}
 }
 
-add_dot_fallback() {
-	echo "Adding DoT fallback upstreams..."
-
-	echo "$DOT_ADD" | while read -r ip host; do
-		[ -n "${ip:-}" ] || continue
-		if run_ndm "dns-proxy tls upstream $ip sni $host"; then
-			:
-		else
-			run_ndm "tls upstream $ip sni $host"
-		fi
-	done
-}
-
-save_config() {
-	run_ndm "system configuration save"
+apply_dns_proxy_config() {
+	echo "Applying DNS proxy upstreams..."
+	run_ndm_script "$(build_dns_proxy_script)"
 }
 
 print_status() {
@@ -225,8 +222,5 @@ print_status() {
 probe_ndm_client
 echo "Using $NDM_BIN ($NDM_MODE)"
 backup_running_config
-remove_old_dns
-add_doh
-add_dot_fallback
-save_config
+apply_dns_proxy_config
 print_status
