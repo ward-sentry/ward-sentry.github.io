@@ -1,13 +1,19 @@
-# Encrypted DNS router script
+# Keenetic encrypted DNS script
 
-This script configures encrypted DNS on an OpenWrt-like router:
+This script configures encrypted DNS on KeeneticOS from the BusyBox/Entware shell.
 
-- DoH: Cloudflare, Quad9, AdGuard unfiltered
+It adds only these upstreams:
+
+- DoH: Cloudflare
+- DoH: Quad9
+- DoH: AdGuard unfiltered
 - DoT fallback: Cloudflare, Quad9, AdGuard unfiltered
+
+The script uses Keenetic's native command client, usually `ndmc` or `ndmq`. It does not require OpenWrt `uci`.
 
 ## Download and run on router
 
-SSH into the router as root, then run:
+SSH into the router as `root`, then run:
 
 ```sh
 cd /tmp
@@ -25,48 +31,54 @@ chmod +x apply-encrypted-dns.sh
 ./apply-encrypted-dns.sh
 ```
 
+## Dry run
+
+To print commands without applying them:
+
+```sh
+cd /tmp
+DRY_RUN=1 ./apply-encrypted-dns.sh
+```
+
 ## Requirements
 
-The router should have:
+The router shell should have one of these Keenetic command clients:
 
-- `uci`
-- `dnsmasq`
-- `stubby` for DoT fallback
-- `https-dns-proxy` for DoH
+- `ndmc`
+- `ndmq`
 
-If `https-dns-proxy` is missing, the script skips DoH and prints a warning.
+Check:
+
+```sh
+which ndmc
+which ndmq
+```
+
+If both are missing, the script cannot change native Keenetic DNS settings from the shell.
 
 ## Check
 
 After running the script:
 
 ```sh
-nslookup openai.com 127.0.0.1
-logread | grep -Ei 'stubby|https-dns|dnsmasq'
+ps | grep -Ei 'stubby|dotproxy|dnsmasq|https' | grep -v grep
+cat /tmp/run/dotproxy-*.yml 2>/dev/null
 ```
 
-You can also check active DNS processes:
+You can also check from a LAN client:
 
 ```sh
-ps | grep -Ei 'stubby|https-dns|dnsmasq' | grep -v grep
+nslookup openai.com 192.168.1.1
 ```
 
-## Backup and rollback
+Replace `192.168.1.1` with your router IP if needed.
 
-Before changing configs, the script creates a backup:
+## Backup
+
+Before changing settings, the script saves:
 
 ```text
-/root/dns-backup-YYYYMMDD-HHMMSS
+/opt/var/backups/keenetic-dns-YYYYMMDD-HHMMSS/running-config.txt
 ```
 
-To rollback manually, copy files back from that directory, for example:
-
-```sh
-cp /root/dns-backup-YYYYMMDD-HHMMSS/dhcp /etc/config/dhcp
-cp /root/dns-backup-YYYYMMDD-HHMMSS/stubby /etc/config/stubby
-cp /root/dns-backup-YYYYMMDD-HHMMSS/https-dns-proxy /etc/config/https-dns-proxy
-
-/etc/init.d/stubby restart
-/etc/init.d/https-dns-proxy restart
-/etc/init.d/dnsmasq restart
-```
+Use that file as a reference if you need to restore the previous DNS settings manually.

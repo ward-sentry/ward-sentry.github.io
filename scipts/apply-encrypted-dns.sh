@@ -1,13 +1,15 @@
 #!/bin/sh
 set -eu
 
-# Apply DoT/DoH upstreams on an OpenWrt-like router.
+# Apply encrypted DNS on KeeneticOS from BusyBox/Entware shell.
+# Primary upstreams: DoH. Fallback upstreams: DoT.
 
-DOT_PORT="${DOT_PORT:-5453}"
-DOH_BASE_PORT="${DOH_BASE_PORT:-5053}"
-BACKUP_DIR="/root/dns-backup-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="/opt/var/backups/keenetic-dns-$(date +%Y%m%d-%H%M%S)"
+DRY_RUN="${DRY_RUN:-0}"
 
-DOT_FALLBACK_RESOLVERS="
+DOT_REMOVE="
+94.140.14.14 dns.adguard-dns.com
+94.140.15.15 dns.adguard-dns.com
 1.1.1.1 cloudflare-dns.com
 1.0.0.1 cloudflare-dns.com
 9.9.9.9 dns.quad9.net
@@ -16,142 +18,203 @@ DOT_FALLBACK_RESOLVERS="
 94.140.14.141 unfiltered.adguard-dns.com
 "
 
-DOH_RESOLVERS="
+DOH_REMOVE="
+https://dns.quad9.net/dns-query
+https://dns.cloudflare.com/dns-query
+https://unfiltered.adguard-dns.com/dns-query
+https://xbox-dns.ru/dns-query
+https://dns.malw.link/dns-query
+"
+
+DOT_ADD="
+1.1.1.1 cloudflare-dns.com
+1.0.0.1 cloudflare-dns.com
+9.9.9.9 dns.quad9.net
+149.112.112.112 dns.quad9.net
+94.140.14.140 unfiltered.adguard-dns.com
+94.140.14.141 unfiltered.adguard-dns.com
+"
+
+DOH_ADD="
 https://dns.cloudflare.com/dns-query
 https://dns.quad9.net/dns-query
 https://unfiltered.adguard-dns.com/dns-query
 "
 
-need_root() {
-	if [ "$(id -u)" != "0" ]; then
-		echo "Run as root."
-		exit 1
-	fi
+die() {
+	echo "ERROR: $*" >&2
+	exit 1
 }
 
-need_uci() {
-	if ! command -v uci >/dev/null 2>&1; then
-		echo "uci not found. This script expects OpenWrt/Entware-style UCI config."
-		exit 1
-	fi
+find_ndm_client() {
+	for bin in ndmc /bin/ndmc /usr/bin/ndmc /sbin/ndmc /usr/sbin/ndmc; do
+		if command -v "$bin" >/dev/null 2>&1; then
+			NDM_BIN="$(command -v "$bin")"
+			NDM_MODE="ndmc-c"
+			return
+		fi
+		if [ -x "$bin" ]; then
+			NDM_BIN="$bin"
+			NDM_MODE="ndmc-c"
+			return
+		fi
+	done
+
+	for bin in ndmq /bin/ndmq /usr/bin/ndmq /sbin/ndmq /usr/sbin/ndmq; do
+		if command -v "$bin" >/dev/null 2>&1; then
+			NDM_BIN="$(command -v "$bin")"
+			NDM_MODE="ndmq-p"
+			return
+		fi
+		if [ -x "$bin" ]; then
+			NDM_BIN="$bin"
+			NDM_MODE="ndmq-p"
+			return
+		fi
+	done
+
+	NDM_BIN=""
+	NDM_MODE=""
 }
 
-backup_configs() {
+run_ndm() {
+	cmd="$1"
+
+	if [ "$DRY_RUN" = "1" ]; then
+		echo "+ $cmd"
+		return 0
+	fi
+
+	echo "+ $cmd"
+	case "$NDM_MODE" in
+		ndmc-c)
+			"$NDM_BIN" -c "$cmd"
+			;;
+		ndmc-args)
+			# shellcheck disable=SC2086
+			"$NDM_BIN" $cmd
+			;;
+		ndmq-p)
+			"$NDM_BIN" -p "$cmd"
+			;;
+		*)
+			die "unknown NDM client mode"
+			;;
+	esac
+}
+
+probe_ndm_client() {
+	find_ndm_client
+	[ -n "$NDM_BIN" ] || die "ndmc/ndmq not found. Run this from KeeneticOS shell, not pure Entware chroot."
+
+	if "$NDM_BIN" -c "show version" >/dev/null 2>&1; then
+		NDM_MODE="ndmc-c"
+		return
+	fi
+
+	# Some builds accept a command as positional arguments.
+	if "$NDM_BIN" show version >/dev/null 2>&1; then
+		NDM_MODE="ndmc-args"
+		return
+	fi
+
+	if "$NDM_BIN" -p "show version" >/dev/null 2>&1; then
+		NDM_MODE="ndmq-p"
+		return
+	fi
+
+	die "found $NDM_BIN, but could not execute a test command through it"
+}
+
+backup_running_config() {
 	mkdir -p "$BACKUP_DIR"
-	for cfg in dhcp stubby https-dns-proxy; do
-		[ -f "/etc/config/$cfg" ] && cp "/etc/config/$cfg" "$BACKUP_DIR/$cfg"
-	done
-	echo "Backup saved to $BACKUP_DIR"
-}
 
-service_restart() {
-	name="$1"
-	if [ -x "/etc/init.d/$name" ]; then
-		"/etc/init.d/$name" restart || true
-	fi
-}
-
-service_enable() {
-	name="$1"
-	if [ -x "/etc/init.d/$name" ]; then
-		"/etc/init.d/$name" enable || true
-	fi
-}
-
-configure_stubby_dot() {
-	if ! command -v stubby >/dev/null 2>&1 && [ ! -x /etc/init.d/stubby ]; then
-		echo "stubby not found; skipping DoT. Install package: stubby"
+	if [ "$DRY_RUN" = "1" ]; then
+		echo "DRY_RUN=1: skipping backup"
 		return
 	fi
 
-	uci -q delete stubby
-	uci set stubby.global=stubby
-	uci set stubby.global.manual='0'
-	uci set stubby.global.trigger='wan'
-	uci add_list stubby.global.dns_transport='GETDNS_TRANSPORT_TLS'
-	uci set stubby.global.tls_authentication='1'
-	uci set stubby.global.tls_query_padding_blocksize='128'
-	uci set stubby.global.edns_client_subnet_private='1'
-	uci set stubby.global.idle_timeout='10000'
-	uci set stubby.global.round_robin_upstreams='1'
-	uci add_list stubby.global.listen_address="127.0.0.1@$DOT_PORT"
-
-	echo "$DOT_FALLBACK_RESOLVERS" | while read -r ip host; do
-		[ -n "${ip:-}" ] || continue
-		section="$(uci add stubby resolver)"
-		uci set "stubby.$section.address=$ip"
-		uci set "stubby.$section.tls_auth_name=$host"
-	done
-
-	uci commit stubby
-	service_enable stubby
-	service_restart stubby
-	echo "DoT configured on 127.0.0.1#$DOT_PORT"
+	if run_ndm_capture "show running-config" > "$BACKUP_DIR/running-config.txt"; then
+		echo "Backup saved to $BACKUP_DIR/running-config.txt"
+	else
+		echo "Could not save running-config backup; continuing anyway."
+	fi
 }
 
-configure_https_doh() {
-	if [ ! -x /etc/init.d/https-dns-proxy ]; then
-		echo "https-dns-proxy not found; skipping DoH. Install package: https-dns-proxy"
-		return
-	fi
+run_ndm_capture() {
+	cmd="$1"
+	case "$NDM_MODE" in
+		ndmc-c)
+			"$NDM_BIN" -c "$cmd"
+			;;
+		ndmc-args)
+			# shellcheck disable=SC2086
+			"$NDM_BIN" $cmd
+			;;
+		ndmq-p)
+			"$NDM_BIN" -p "$cmd"
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
 
-	uci -q delete https-dns-proxy
-	port="$DOH_BASE_PORT"
+remove_old_dns() {
+	echo "Removing known encrypted DNS upstreams..."
 
-	echo "$DOH_RESOLVERS" | while read -r url; do
+	echo "$DOH_REMOVE" | while read -r url; do
 		[ -n "${url:-}" ] || continue
-		section="$(uci add https-dns-proxy https-dns-proxy)"
-		uci set "https-dns-proxy.$section.resolver_url=$url"
-		uci set "https-dns-proxy.$section.listen_addr=127.0.0.1"
-		uci set "https-dns-proxy.$section.listen_port=$port"
-		uci set "https-dns-proxy.$section.bootstrap_dns=1.1.1.1,9.9.9.9"
-		uci set "https-dns-proxy.$section.user=nobody"
-		uci set "https-dns-proxy.$section.group=nogroup"
-		port=$((port + 1))
+		run_ndm "no ip name-server https $url" || true
 	done
 
-	uci commit https-dns-proxy
-	service_enable https-dns-proxy
-	service_restart https-dns-proxy
-	echo "DoH configured on 127.0.0.1#$DOH_BASE_PORT and following ports"
+	echo "$DOT_REMOVE" | while read -r ip host; do
+		[ -n "${ip:-}" ] || continue
+		run_ndm "no ip name-server tls $ip $host" || true
+	done
 }
 
-configure_dnsmasq() {
-	uci set dhcp.@dnsmasq[0].noresolv='1'
+add_doh() {
+	echo "Adding DoH upstreams..."
 
-	while uci -q delete dhcp.@dnsmasq[0].server; do :; done
+	echo "$DOH_ADD" | while read -r url; do
+		[ -n "${url:-}" ] || continue
+		run_ndm "ip name-server https $url"
+	done
+}
 
-	if [ -x /etc/init.d/https-dns-proxy ]; then
-		port="$DOH_BASE_PORT"
-		echo "$DOH_RESOLVERS" | while read -r url; do
-			[ -n "${url:-}" ] || continue
-			uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#$port"
-			port=$((port + 1))
-		done
-	fi
+add_dot_fallback() {
+	echo "Adding DoT fallback upstreams..."
 
-	uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#$DOT_PORT"
+	echo "$DOT_ADD" | while read -r ip host; do
+		[ -n "${ip:-}" ] || continue
+		run_ndm "ip name-server tls $ip $host"
+	done
+}
 
-	uci commit dhcp
-	service_restart dnsmasq
-	echo "dnsmasq now uses DoH first and DoT as fallback"
+save_config() {
+	run_ndm "system configuration save"
 }
 
 print_status() {
 	echo
 	echo "Configured upstreams:"
-	echo "$DOH_RESOLVERS" | awk 'NF { printf "DoH  %s\n", $1 }'
-	echo "$DOT_FALLBACK_RESOLVERS" | awk 'NF { printf "DoT fallback  %-16s %s\n", $1, $2 }'
+	echo "$DOH_ADD" | awk 'NF { printf "DoH          %s\n", $1 }'
+	echo "$DOT_ADD" | awk 'NF { printf "DoT fallback %-16s %s\n", $1, $2 }'
 	echo
-	echo "Check:"
-	echo "  nslookup openai.com 127.0.0.1"
-	echo "  logread | grep -Ei 'stubby|https-dns|dnsmasq'"
+	echo "Check on router:"
+	echo "  ps | grep -Ei 'stubby|dotproxy|dnsmasq|https' | grep -v grep"
+	echo "  cat /tmp/run/dotproxy-*.yml 2>/dev/null"
+	echo
+	echo "Backup:"
+	echo "  $BACKUP_DIR/running-config.txt"
 }
 
-need_root
-need_uci
-backup_configs
-configure_stubby_dot
-configure_https_doh
-configure_dnsmasq
+probe_ndm_client
+echo "Using $NDM_BIN ($NDM_MODE)"
+backup_running_config
+remove_old_dns
+add_doh
+add_dot_fallback
+save_config
 print_status
