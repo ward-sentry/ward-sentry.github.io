@@ -1,0 +1,79 @@
+Package: chur-amneziawg-go
+Version: f4f4c99-1
+Depends: libc, libssp, librt, libpthread
+Provides: chur-amneziawg-go-any
+Source: feeds/base/chur/chur-amneziawg-go
+SourceName: chur-amneziawg-go
+Section: net
+SourceDateEpoch: 1781457931
+URL: https://github.com/amnezia-vpn/amneziawg-go
+Maintainer: Chur Keenetic
+Architecture: mips-3.4
+Installed-Size: 3686400
+Description:  AmneziaWG userspace implementation built from the official upstream
+ amnezia-vpn/amneziawg-go repository pinned by Chur Keenetic.
+Filename: chur-amneziawg-go_f4f4c99-1_mips-3.4.ipk
+Size: 1369308
+SHA256sum: 51aab009b25106d6dd807955c736cb4091263ecadb1b77a6096653e1bfa3fced
+MD5Sum: e1a2c3002243687a9746eafb6c3bc3f2
+
+Package: chur-amneziawg-tools
+Version: 1.0.20260223-2
+Depends: libc, libssp, librt, libpthread, bash, ip-full, coreutils-stat
+Provides: chur-amneziawg-tools-any
+Source: feeds/base/chur/chur-amneziawg-tools
+SourceName: chur-amneziawg-tools
+License: GPL-2.0
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1781457931
+URL: https://github.com/amnezia-vpn/amneziawg-tools
+Maintainer: Chur Keenetic
+Architecture: mips-3.4
+Installed-Size: 102400
+Description:  AmneziaWG userspace control tools built from the official upstream
+ amnezia-vpn/amneziawg-tools repository pinned by Chur Keenetic.
+ This package installs awg and awg-quick into /opt/bin.
+Filename: chur-amneziawg-tools_1.0.20260223-2_mips-3.4.ipk
+Size: 43657
+SHA256sum: e10330f00234da5e9054862e1a2ea0fabf6a697c1750f220aad7ae197f04f80a
+MD5Sum: 611f48e45bdf131f9fb056ee67ab50ba
+
+Package: chur-amneziawg
+Version: 0.1.0-1
+Depends: libc, libssp, librt, libpthread, chur-amneziawg-go, chur-amneziawg-tools
+Provides: chur-amneziawg-any
+Source: feeds/base/chur/chur-amneziawg
+SourceName: chur-amneziawg
+Section: net
+SourceDateEpoch: 1781457931
+URL: https://github.com/ward-sentry/chur-keenetic
+Maintainer: Chur Keenetic
+Architecture: mips-3.4
+Installed-Size: 10240
+Description:  Meta package that installs all AmneziaWG runtime dependencies required by
+ Chur Keenetic.
+Filename: chur-amneziawg_0.1.0-1_mips-3.4.ipk
+Size: 812
+SHA256sum: 91f915c90f97db9bba8d7754990e9586ae0379999c0f3bcc6f981505f32fd45e
+MD5Sum: 323470d08d42fc150496ee4652e849ad
+
+Package: chur-keenetic
+Version: 0.1.0-23
+Depends: libc, libssp, librt, libpthread
+Provides: chur-keenetic-any
+Source: feeds/base/chur/chur-keenetic
+SourceName: chur-keenetic
+Section: net
+SourceDateEpoch: 1781457931
+URL: https://github.com/ward-sentry/chur-keenetic
+Maintainer: Chur Keenetic
+Architecture: mips-3.4
+Installed-Size: 7372800
+Description:  Chur Keenetic web manager. Installs the manager binary and an Entware
+ init script that starts the web UI on port 8088.
+Filename: chur-keenetic_0.1.0-23_mips-3.4.ipk
+Size: 2615468
+SHA256sum: 342918c76650dccdf710310009936b7f2a490eedb88ecf54b4f5c752c6e35531
+MD5Sum: 4d3d14431c18a1d7fdade09a43f3ee4d
+
